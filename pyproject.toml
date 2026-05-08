@@ -1,0 +1,20 @@
+[project]
+name = "todo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "bottle>=0.13.4",
+    "gevent-websocket>=0.10.1",
+    "mtd",
+    "psycopg2-binary>=2.9.12",
+]
+
+[tool.uv.workspace]
+members = [
+    "mtd",
+]
+
+[tool.uv.sources]
+mtd = { workspace = true }

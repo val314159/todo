@@ -1,0 +1,27 @@
+[
+    {
+	"type": "workflow",
+	"id": "personal_todo_list",
+	"name", "personal TODO list",
+    },
+    {
+        "id": "morning-reset",
+        "display_name": "Morning reset: inbox zero, desk clear, plan the day",
+        "python_class": "ManualTask",
+	"meta": {
+	    "due_at": "NOW()",
+            "priority": "high",
+            "notes": "Start with a clean surface and a short written plan."
+        }
+    },
+    {
+        "id": "ship-one-useful-thing",
+        "display_name": "Ship one useful thing before lunch",
+        "python_class": "ManualTask",
+        "meta": {
+	    "due_at": "NOW()",
+            "priority": "high",
+            "notes": "Small is fine; merged, sent, posted, or otherwise real."
+        }
+    }
+]
