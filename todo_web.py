@@ -142,7 +142,7 @@ def error_json(error):
 @app.get("/")
 @app.get("/<path:path>")
 def index(path='index.html'):
-    return bottle.static_file(path=ROOTPATH)
+    return bottle.static_file(path, root=ROOTPATH)
 
 
 @app.get("/api/tasks")
