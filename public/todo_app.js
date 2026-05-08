@@ -35,7 +35,7 @@ const priorityClass = {
   medium: "border-amber-200 bg-amber-50 text-amber-800",
   low: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
-const stateCycle = ["IDLE", "WAITING", "RUNNING", "BLOCKED", "DONE"];
+const stateCycle = ["IDLE", "WAITING", "RUNNING", "BLOCKED"];
 const stateClass = {
   IDLE: "border-zinc-200 bg-white text-zinc-500",
   WAITING: "border-sky-200 bg-sky-50 text-sky-700",
@@ -122,6 +122,7 @@ function titleClass(task) {
 
 function nextState(value) {
   const index = stateCycle.indexOf(value);
+  if (index === -1) return "RUNNING";
   return stateCycle[(index + 1) % stateCycle.length];
 }
 
@@ -298,7 +299,7 @@ elts.list.addEventListener("change", async (event) => {
   try {
     await api(`/api/tasks/${encodeURIComponent(row.dataset.id)}`, {
       method: "PATCH",
-      body: JSON.stringify({ completed: event.target.checked }),
+      body: JSON.stringify({ state: event.target.checked ? "DONE" : "RUNNING" }),
     });
     await loadTasks();
   } catch (error) {
