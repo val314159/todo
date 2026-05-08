@@ -35,6 +35,14 @@ const priorityClass = {
   medium: "border-amber-200 bg-amber-50 text-amber-800",
   low: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
+const stateCycle = ["IDLE", "WAITING", "RUNNING", "BLOCKED", "DONE"];
+const stateClass = {
+  IDLE: "border-zinc-200 bg-white text-zinc-500",
+  WAITING: "border-sky-200 bg-sky-50 text-sky-700",
+  RUNNING: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  BLOCKED: "border-red-200 bg-red-50 text-red-700",
+  DONE: "border-zinc-300 bg-zinc-100 text-zinc-500",
+};
 
 function showError(message) {
   elts.error.textContent = message;
@@ -105,13 +113,28 @@ function dueClass(task) {
   return time < Date.now() ? "text-red-700" : "text-zinc-500";
 }
 
+function titleClass(task) {
+  if (task.state === "DONE") return "font-normal text-zinc-500 line-through";
+  if (task.state === "RUNNING" || task.state === "BLOCKED") return "font-bold text-zinc-950";
+  if (task.state === "WAITING") return "font-normal text-zinc-700";
+  return "font-normal text-zinc-950";
+}
+
+function nextState(value) {
+  const index = stateCycle.indexOf(value);
+  return stateCycle[(index + 1) % stateCycle.length];
+}
+
 function matchesTask(task) {
   if (state.filter === "active" && task.completed) return false;
   if (state.filter === "completed" && !task.completed) return false;
   if (state.priority !== "all" && task.priority !== state.priority) return false;
   const query = state.query.trim().toLowerCase();
   if (!query) return true;
-  return `${task.title} ${task.notes || ""}`.toLowerCase().includes(query);
+  const dependencies = (task.dependencies || [])
+    .map((dependency) => `${dependency.title} ${dependency.state}`)
+    .join(" ");
+  return `${task.title} ${task.notes || ""} ${dependencies}`.toLowerCase().includes(query);
 }
 
 function sortTasks(tasks) {
@@ -151,22 +174,34 @@ function renderTabs() {
 
 function taskRow(task) {
   const checked = task.completed ? "checked" : "";
-  const titleClass = task.completed ? "text-zinc-500 line-through" : "text-zinc-950";
   const priority = escapeHtml(task.priority || "medium");
   const notes = task.notes ? `<p class="mt-2 whitespace-pre-wrap break-words text-sm text-zinc-600">${escapeHtml(task.notes)}</p>` : "";
+  const dependencies = task.dependencies || [];
+  const dependencyLine = dependencies.length ? `
+    <p class="mt-2 text-xs text-zinc-500">
+      depends on ${dependencies.map((dependency) => {
+        const label = `${dependency.title} (${dependency.state})`;
+        return `<span class="mr-2 whitespace-nowrap">${escapeHtml(label)}</span>`;
+      }).join("")}
+    </p>
+  ` : "";
   return `
     <li class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm" data-id="${escapeHtml(task.id)}">
       <div class="flex gap-3">
-        <input type="checkbox" title="Toggle complete" class="task-toggle mt-1 h-5 w-5 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-900" ${checked}>
+        <input type="checkbox" title="Mark done" class="task-toggle mt-1 h-5 w-5 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-900" ${checked}>
         <div class="min-w-0 flex-1">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
-              <h3 class="break-words text-base font-semibold ${titleClass}">${escapeHtml(task.title)}</h3>
+              <h3 class="break-words text-base ${titleClass(task)}">${escapeHtml(task.title)}</h3>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <button type="button" title="Cycle task state" class="task-state inline-flex h-6 items-center rounded-md border px-2 font-semibold ${stateClass[task.state] || stateClass.IDLE}">
+                  ${escapeHtml(task.state)}
+                </button>
                 <span class="inline-flex h-6 items-center rounded-md border px-2 font-semibold ${priorityClass[task.priority] || priorityClass.medium}">${priority}</span>
                 <span class="${dueClass(task)}">${escapeHtml(dueLabel(task.due_at))}</span>
-                <span class="text-zinc-400">${escapeHtml(task.state)}</span>
               </div>
+              ${notes}
+              ${dependencyLine}
             </div>
             <div class="flex shrink-0 gap-1">
               <button type="button" title="Edit task" class="task-edit grid h-9 w-9 place-items-center rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900">
@@ -177,7 +212,6 @@ function taskRow(task) {
               </button>
             </div>
           </div>
-          ${notes}
         </div>
       </div>
     </li>
@@ -256,30 +290,6 @@ elts.form.addEventListener("submit", async (event) => {
   }
 });
 
-elts.list.addEventListener("click", async (event) => {
-  const row = event.target.closest("li[data-id]");
-  if (!row) return;
-  const task = state.tasks.find((item) => item.id === row.dataset.id);
-  if (!task) return;
-
-  if (event.target.closest(".task-edit")) {
-    editTask(task);
-    return;
-  }
-
-  if (event.target.closest(".task-delete")) {
-    if (!confirm("Delete this task?")) return;
-    clearError();
-    try {
-      await api(`/api/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
-      if (elts.editingId.value === task.id) resetForm();
-      await loadTasks();
-    } catch (error) {
-      showError(error.message);
-    }
-  }
-});
-
 elts.list.addEventListener("change", async (event) => {
   if (!event.target.classList.contains("task-toggle")) return;
   const row = event.target.closest("li[data-id]");
@@ -294,6 +304,44 @@ elts.list.addEventListener("change", async (event) => {
   } catch (error) {
     event.target.checked = !event.target.checked;
     showError(error.message);
+  }
+});
+
+elts.list.addEventListener("click", async (event) => {
+  const row = event.target.closest("li[data-id]");
+  if (!row) return;
+  const task = state.tasks.find((item) => item.id === row.dataset.id);
+  if (!task) return;
+
+  if (event.target.closest(".task-edit")) {
+    editTask(task);
+    return;
+  }
+
+  if (event.target.closest(".task-state")) {
+    clearError();
+    try {
+      await api(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ state: nextState(task.state) }),
+      });
+      await loadTasks();
+    } catch (error) {
+      showError(error.message);
+    }
+    return;
+  }
+
+  if (event.target.closest(".task-delete")) {
+    if (!confirm("Delete this task?")) return;
+    clearError();
+    try {
+      await api(`/api/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
+      if (elts.editingId.value === task.id) resetForm();
+      await loadTasks();
+    } catch (error) {
+      showError(error.message);
+    }
   }
 });
 

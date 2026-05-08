@@ -54,6 +54,23 @@ def upsert_tasks(cursor, workflow_id, tasks):
         )
 
 
+def upsert_relations(cursor, workflow_id, relations):
+    for relation in relations:
+        cursor.execute(
+            """
+            INSERT INTO relations (workflow_id, source_id, kind, target_id)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (workflow_id, source_id, kind, target_id) DO NOTHING
+            """,
+            (
+                workflow_id,
+                relation["source_id"],
+                relation["kind"],
+                relation["target_id"],
+            ),
+        )
+
+
 def print_workflow(cursor, workflow_id):
     cursor.execute(
         """
@@ -78,3 +95,18 @@ def print_workflow(cursor, workflow_id):
     for task_id, display_name, task_state, due_at in cursor.fetchall():
         print(f"- {task_id}: {display_name}")
         print(f"  state: {task_state}  due: {due_at}")
+
+    cursor.execute(
+        """
+        SELECT source_id, kind, target_id
+        FROM relations
+        WHERE workflow_id = %s
+        ORDER BY source_id, kind, target_id
+        """,
+        (workflow_id,)
+    )
+    rows = cursor.fetchall()
+    if rows:
+        print("relations:")
+        for source_id, kind, target_id in rows:
+            print(f"- {source_id} {kind} {target_id}")

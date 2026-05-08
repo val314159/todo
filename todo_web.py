@@ -114,7 +114,7 @@ def ensure_workflow(cursor):
     )
 
 
-def row_to_task(row):
+def row_to_task(row, dependencies=None):
     meta = row.get("meta") or {}
     state = row.get("task_state") or "IDLE"
     priority = meta.get("priority") if meta.get("priority") in PRIORITIES else "medium"
@@ -128,7 +128,37 @@ def row_to_task(row):
         "notes": meta.get("notes") or "",
         "created_at": meta.get("created_at"),
         "updated_at": meta.get("updated_at"),
+        "dependencies": dependencies or [],
     }
+
+
+def fetch_dependencies(cursor):
+    cursor.execute(
+        """
+        SELECT
+            r.source_id AS task_id,
+            r.target_id AS dependency_id,
+            r.kind,
+            t.display_name AS dependency_title,
+            t.task_state::text AS dependency_state
+        FROM relations r
+        LEFT JOIN tasks t
+          ON t.workflow_id = r.workflow_id
+         AND t.id = r.target_id
+        WHERE r.workflow_id = %s
+        ORDER BY r.source_id, r.kind, r.target_id
+        """,
+        (WORKFLOW_ID,),
+    )
+    dependencies = {}
+    for row in cursor.fetchall():
+        dependencies.setdefault(row["task_id"], []).append({
+            "id": row["dependency_id"],
+            "title": row.get("dependency_title") or row["dependency_id"],
+            "state": row.get("dependency_state") or "UNKNOWN",
+            "kind": row.get("kind") or "depends_on",
+        })
+    return dependencies
 
 
 def fetch_task(cursor, task_id):
@@ -205,7 +235,14 @@ def list_tasks():
                     """,
                     (WORKFLOW_ID,),
                 )
-                return json_response({"tasks": [row_to_task(row) for row in cursor.fetchall()]})
+                rows = cursor.fetchall()
+                dependencies = fetch_dependencies(cursor)
+                return json_response({
+                    "tasks": [
+                        row_to_task(row, dependencies.get(row["id"]))
+                        for row in rows
+                    ]
+                })
     except psycopg2.Error as exc:
         raise bottle.HTTPError(500, f"Database error: {exc.pgerror or exc}\n")
 
