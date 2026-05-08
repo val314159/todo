@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "bottle>=0.13.4",
+    "gevent==25.5.1",
     "gevent-websocket>=0.10.1",
     "mtd",
     "psycopg2-binary>=2.9.12",
